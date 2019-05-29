@@ -1,0 +1,104 @@
+
+CSS 434
+Program 4: Distributed File System
+Instructor: Munehiro Fukuda
+Due date: see the syllabus
+
+1. Purpose
+The final project is to design and implement a very simple distributed file
+system (DFS) in that a DFS client retrieves a file from a central DFS server and
+caches it in its /tmp directory for better performance. Our implementation uses
+Java RMI. Through this project, we will understand that:
+    (1) the design of both client and server is based on a state-transition
+        diagram;
+    (2) the server needs to maintain a directory of clients sharing the same
+        file so as to implement delayed write and server-initiated invalidation;
+    (3) both server and client need to call each other’s RMI functions.
+
+2. DFS Model
+Our DFS is based on the following schemes:
+    (1) One file cached in client’s disk and multiple files cached in server’s
+        memory. A DFS client program can cache just only one file in its local
+        “/tmp” directory, whereas a DFS server can cache as many files as
+        requested by DFS clients.
+    (2) Session semantics, a session in our system means a period of time while
+        a file is being accessed or edited by a client’s emacs text editor. In
+        other words, a session starts from file download from a server with the
+        read or the write mode, allows the file to be opened for read only or
+        for modification with emacs, and completes when the emacs closes the
+        file. A single writer but no multiple writer clients are allowed,
+        regardless of the number of reader clients. Specifically, a client is
+        guaranteed to modify a file exclusively, but may read a file being
+        modified by someone else.
+    (3) Delayed write, a client can maintain a file it has modified in its local
+        “/tmp” directory until it needs to download a different file from a
+        server or the server sends the client a write-back request as indicating
+        that there is someone else who wants to modify the same file. In either
+        case, the client must upload(i.e., write back) the modified file to the
+        server.
+    (4) Server-initiated invalidation, a server maintains a directory or a list
+        of clients sharing the same file. If someone requests this file to
+        download with the write mode, the server sends an invalidation message
+        to all those clients that then invalidates their file copy. The server
+        also sends a write-back message to the currently file-modifying client
+        that then uploads the latest file contents to the server.
+
+3. DFS ClientSpecification
+Based on the DFS model discussed above, our DFS client program has the following
+specification.
+    (1) User input, once invoked, the client program prints out the following
+        message to start a file session.
+            FileClient: Next file to open
+            File name:
+            How(r/w):
+        A user types the name of a file he/she wants to access as well as the
+        file access mode (such as read or write).
+    (2) File caching, given such a user input, your client program first checks
+        if it has cached this file locally in the “/tmp” directory. To be more
+        specific, if your client program has cached a file, it has to maintain
+        the file contents in “/tmp/youraccount.txt”. For instance, if your
+        account is mfukuda, the file contents should be cached as
+        “/tmp/mfukuda.txt”. The file attributes should be maintained internally
+        in the client program. The attributes must include at least:
+            Name: contains the name of a file whose contents are cached in
+                /tmp/youraccount.txt
+            Access mode: maintains the current file access mode such as read or
+                write
+            Ownership: indicates if this DFS client is owning
+                (or exclusively writing) a cached file.
+            State: indicates if this DFS client has no cached file, if a cached
+                file is shared with other DFS clients, or if it is owned by
+                another DFS client, etc.
+        The client program caches only one cache entry. In other words, it can
+        cache up to one file at any point of time. The initial cached file state
+        is “invalid”.
+    (3) Downloading a new file, if the DFS client hasn’t cached any file, it
+        downloads the requested file from its DFS server. The request is
+        performed through the server’s RPC function:
+            FileContents download(String myIpName, String filename, String mode)
+        As explained later, the DSF server needs to keep track of who has
+        downloaded a given file, for which reason your client program must send
+        the server its IP name as the first argument. The DFS client receives
+        an instance of the FileContents class whose specification is as follows:
+
+        import java.io.*;
+        import java.util.*;
+
+        public class FileContents
+        implements Serializable
+        {
+            private byte[] contents;
+
+            public FileContents(byte[] contents)
+            {   // file contents
+                this.contents = contents;
+            }
+            public void print() throws IOException
+            {
+                System.out.println("FileContents = " + contents);
+            }
+            public byte[] get()
+            {
+                return contents;
+            }
+        }
