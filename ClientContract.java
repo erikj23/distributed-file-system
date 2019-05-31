@@ -4,6 +4,7 @@ import java.rmi.RemoteException;
 
 interface ClientContract
 extends Remote
-{   // placeholder
-    void function() throws RemoteException;
+{
+    boolean invalidate();
+    boolean writeback();
 }

@@ -10,6 +10,14 @@ implements ServerContract, Serializable
     private static final long serialVersionUID = 5781815840427285195L;
     
     ServerRemote() throws RemoteException{}
+    
+    @Override
+    public FileContents download(String myIpName, String filename, String mode) {
+        return null;
+    }
 
-    public void function() throws RemoteException{}
+    @Override
+    public boolean upload(String myIpName, String filename, FileContents contents) {
+        return false;
+    }
 }
