@@ -5,6 +5,7 @@ import java.util.Scanner;
 import java.io.Serializable;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.io.File;                            // Used by in_cache
 
 class Client
 extends UnicastRemoteObject
@@ -124,15 +125,21 @@ implements ClientContract, Serializable
         return false;
     }
 
+    /**
+     * in_cache checks the tmp directory for the specified file.
+     * @param file_name - File we are looking for in the /tmp directory
+     * @return - True if the file is tmp, false otherwise
+     */
     boolean in_cache(String file_name)
-    {   
-        // checks to see if file is in "/tmp/"
-        return false;
+    {
+        String filePathName = "/tmp/";
+        File check = new File(filePathName + filetolookfor);
+        return check.exists();
     }
 
     void cache(FileContents contents)
     {
-        
+
     }
 
     void run_emacs()
