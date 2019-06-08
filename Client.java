@@ -14,6 +14,7 @@ implements ClientContract, Serializable
     private static final String RMI_BIND = "rmi://localhost:%d/client";
     
     private final String RMI_LOOKUP = "rmi://%s:%d/server";
+    private final String CHMOD = "chmod %d %s";
     private final String PROGRAM = "emacs %s %s";
     
     private ServerContract server_object;
@@ -22,28 +23,17 @@ implements ClientContract, Serializable
 
     Client(String server_address, int server_port) throws RemoteException
     {
-        //
+        // set up server_object
         try
         {
             // get local host addresss
             local_host_name = InetAddress.getLocalHost().getHostName();
             
-            // use naming lookup to obtain remote reference from network
+            // get remote reference
             server_object = (ServerContract)Naming.lookup(String.format(
                 RMI_LOOKUP,
                 server_address,
                 server_port));
-
-            // create registry for this remote client object
-            Utility.StartRegistry(server_port);
-
-            // create client object
-            cache_entry = new ClientCacheEntry(
-                prompt_for("file name"),
-                prompt_for("mode"));
-
-            
-
         }
         catch(Exception error)
         {
@@ -51,24 +41,37 @@ implements ClientContract, Serializable
         }
     }
 
-
     void execute()
     {
         FileContents contents;
 
         //
         try
-        {
-            // download file from server
-            contents = server_object.download(
-                local_host_name,
-                cache_entry.file_name,
-                cache_entry.mode.toString());
+        {   // ! (1) user input
+            // create cache entry
+            cache_entry = new ClientCacheEntry(
+                prompt_for("file name"),
+                prompt_for("mode"));
 
-            // store file into disk
-            cache(contents);
+            
+            // ! (2) file caching
+            if(in_cache(cache_entry.file_name))
+            {
+                // check if valid
+            }            
+            else 
+            {   
+                // ! (3) download new file
+                contents = server_object.download(
+                    local_host_name,
+                    cache_entry.file_name,
+                    cache_entry.mode.toString());
 
-            // run the emacs client in mode requested
+                // store file into disk    
+                cache(contents);
+            }
+
+            // ! (4) open with emacs
             run_emacs();
         }
         catch(Exception error)
@@ -105,14 +108,15 @@ implements ClientContract, Serializable
         return false;
     }
 
-    void cache(FileContents contents)
-    {
-
+    boolean in_cache(String file_name)
+    {   
+        // checks to see if file is in "/tmp/"
+        return false;
     }
 
-    void chmod()
+    void cache(FileContents contents)
     {
-
+        
     }
 
     void run_emacs()
@@ -123,8 +127,18 @@ implements ClientContract, Serializable
             // get current runtime object
             Runtime runtime = Runtime.getRuntime();
             
+            // manage process
+            Process process;
+            
+            // execute chmod
+            process = runtime.exec(
+                String.format(
+                    CHMOD, 
+                    cache_entry.mode.permission,
+                    cache_entry.file_name));
+
             // execute program
-            Process process = runtime.exec(
+            process = runtime.exec(
                 String.format(
                     PROGRAM, 
                     cache_entry.file_name, 
@@ -143,24 +157,29 @@ implements ClientContract, Serializable
 
     public static void main(String[] arguments)
     {
-        // verify arguments
+        // verify argument quantity
         if (arguments.length != 2)
         {
             System.out.println("usage:java Client server_address server_port");
             System.exit(-1);
         }
         
-        //
+        // get server address
         String server_address = arguments[0];
         
-        //
+        // get server port number
         int server_port = Integer.parseInt(arguments[1]);
 
+        //
         try
         {
+            // create registry for this remote client object
+            Utility.StartRegistry(server_port);
+
             // start client and set up initial download
             Client client = new Client(server_address, server_port);
             
+            // bind object to name in registry
             Naming.rebind(String.format(RMI_BIND, server_port), client);
     
             client.execute();
