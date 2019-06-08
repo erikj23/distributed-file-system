@@ -133,7 +133,7 @@ implements ClientContract, Serializable
     boolean in_cache(String file_name)
     {
         String filePathName = "/tmp/";
-        File check = new File(filePathName + filetolookfor);
+        File check = new File(filePathName + file_name);
         return check.exists();
     }
 
