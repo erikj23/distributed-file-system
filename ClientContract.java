@@ -5,6 +5,6 @@ import java.rmi.RemoteException;
 interface ClientContract
 extends Remote
 {
-    boolean invalidate();
-    boolean writeback();
+    boolean invalidate() throws RemoteException;
+    boolean write_back() throws RemoteException;
 }
