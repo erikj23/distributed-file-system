@@ -1,45 +1,49 @@
 
 import java.net.InetAddress;
 import java.rmi.Naming;
+import java.util.Scanner;
+import java.io.Serializable;
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
 
 class Client
+extends UnicastRemoteObject
+implements ClientContract, Serializable
 {
+    private static final long serialVersionUID = -5653266189145749167L;
+    private static final String RMI_BIND = "rmi://localhost:%d/client";
     
-    private int server_port;
-    private String server_address;
-    private ServerRemote server_object;
-    private ClientRemote client_object;
-    // might need to be in client remote
-    private String local_host_address;
-    private FileContents file_contents;
+    private final String RMI_LOOKUP = "rmi://%s:%d/server";
+    private final String PROGRAM = "emacs %s %s";
+    
+    private ServerContract server_object;
+    private String local_host_name;    
+    private ClientCacheEntry cache_entry;
 
-    Client(String[] arguments)
+    Client(String server_address, int server_port) throws RemoteException
     {
         //
         try
-        {   
-            //
-            local_host_address = InetAddress.getLocalHost().getHostAddress();
-
-            // get server port from arguments
-            server_port = Integer.parseInt(arguments[1]);
+        {
+            // get local host addresss
+            local_host_name = InetAddress.getLocalHost().getHostName();
             
             // use naming lookup to obtain remote reference from network
-            server_object = (ServerRemote)Naming.lookup(
-                String.format(
-                    "rmi://%s:%d/server", 
-                    server_address, 
-                    server_port));
-                    
-            
-            client_object = new ClientRemote(
-                prompt("sentence", "follow"), 
-                prompt("", ""));
+            server_object = (ServerContract)Naming.lookup(String.format(
+                RMI_LOOKUP,
+                server_address,
+                server_port));
+
+            // create registry for this remote client object
+            Utility.StartRegistry(server_port);
+
+            // create client object
+            cache_entry = new ClientCacheEntry(
+                prompt_for("file name"),
+                prompt_for("mode"));
+
             
 
-            //
-            file_contents = 
-                server_object.download(local_host_address, "file_name", "mode");
         }
         catch(Exception error)
         {
@@ -47,21 +51,123 @@ class Client
         }
     }
 
-    String prompt(String sentence, String follow)
+
+    void execute()
     {
+        FileContents contents;
+
+        //
+        try
+        {
+            // download file from server
+            contents = server_object.download(
+                local_host_name,
+                cache_entry.file_name,
+                cache_entry.mode.toString());
+
+            // store file into disk
+            cache(contents);
+
+            // run the emacs client in mode requested
+            run_emacs();
+        }
+        catch(Exception error)
+        {
+
+        }
+    }
+
+    String prompt_for(String sentence)
+    {
+        try
+        {
+            Scanner input = new Scanner(System.in);
+
+            System.out.printf("%s: ", sentence);
+            return input.nextLine().toUpperCase();
+
+        }
+        catch(Exception error)
+        {
+            error.printStackTrace();
+        }
+
         return null;
     }
 
+    public boolean invalidate() throws RemoteException
+    {
+        return false;
+    }
+
+    public boolean write_back() throws RemoteException
+    {
+        return false;
+    }
+
+    void cache(FileContents contents)
+    {
+
+    }
+
+    void chmod()
+    {
+
+    }
+
+    void run_emacs()
+    {
+        //
+        try 
+        {
+            // get current runtime object
+            Runtime runtime = Runtime.getRuntime();
+            
+            // execute program
+            Process process = runtime.exec(
+                String.format(
+                    PROGRAM, 
+                    cache_entry.file_name, 
+                    cache_entry.mode.options));
+            
+            // wait for above program to terminate
+            process.waitFor();
+        } 
+        catch (Exception error)
+        {
+            
+            error.printStackTrace();
+        }
+    }
+
+
     public static void main(String[] arguments)
-    {   
+    {
         // verify arguments
         if (arguments.length != 2)
         {
             System.out.println("usage:java Client server_address server_port");
             System.exit(-1);
         }
+        
+        //
+        String server_address = arguments[0];
+        
+        //
+        int server_port = Integer.parseInt(arguments[1]);
 
-        // start client
-        Client client = new Client(arguments);
+        try
+        {
+            // start client and set up initial download
+            Client client = new Client(server_address, server_port);
+            
+            Naming.rebind(String.format(RMI_BIND, server_port), client);
+    
+            client.execute();
+        }
+        catch(Exception error)
+        {
+            error.printStackTrace();
+        }
     }
 }

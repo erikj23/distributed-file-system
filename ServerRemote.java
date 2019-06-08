@@ -18,8 +18,7 @@ implements ServerContract, Serializable
         cache_entries = new Vector<ServerCacheEntry>();
     }
     
-    @Override
-    public FileContents download(String myIpName, String filename, String mode)
+    public FileContents download(String address, String file_name, String mode)
     throws RemoteException
     {
         // send
@@ -27,8 +26,7 @@ implements ServerContract, Serializable
         return null;
     }
 
-    @Override
-    public boolean upload(String myIpName, String filename, 
+    public boolean upload(String address, String file_name, 
         FileContents contents)
     throws RemoteException
     {
