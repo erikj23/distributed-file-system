@@ -1,4 +1,4 @@
-// asdasd
+// Hello this is a test
 import java.net.InetAddress;
 import java.rmi.Naming;
 import java.util.Scanner;
@@ -56,9 +56,25 @@ implements ClientContract, Serializable
             
             // ! (2) file caching
             if(in_cache(cache_entry.file_name))
-            {
-                // check if valid
-            }            
+            {   
+                // ! (5) accessing cached file
+                // write owned > write
+                if(cache_entry.state == ClientState.WRITE_OWNED); // run emacs
+                
+                // read shared + read > read
+                else if(cache_entry.state == ClientState.READ_SHARED &&
+                    cache_entry.mode == Mode.READ); // run emacs
+                    
+                // read shared + write > obtain ownership
+                else if(cache_entry.state == ClientState.READ_SHARED &&
+                    cache_entry.mode == Mode.READ_WRITE)
+                {
+                    contents = server_object.download(
+                        local_host_name,
+                        cache_entry.file_name,
+                        cache_entry.mode.toString());
+                } 
+            }
             else 
             {   
                 // ! (3) download new file
@@ -144,12 +160,11 @@ implements ClientContract, Serializable
                     cache_entry.file_name, 
                     cache_entry.mode.options));
             
-            // wait for above program to terminate
+            // wait for above process to terminate
             process.waitFor();
         } 
         catch (Exception error)
         {
-            
             error.printStackTrace();
         }
     }

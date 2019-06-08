@@ -10,6 +10,6 @@ enum Mode
     Mode(String options, int permission)
     {
         this.options = options;
-        this.permission = permission
+        this.permission = permission;
     }
 }
