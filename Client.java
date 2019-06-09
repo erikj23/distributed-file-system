@@ -57,7 +57,7 @@ implements ClientContract, Serializable
             
             // ! (2) file caching
             if(in_cache(cache_entry.file_name))
-            {   
+            {   // ! check if valid
                 // ! (5) accessing cached file
                 // write owned > write
                 if(cache_entry.state == ClientState.WRITE_OWNED); // run emacs
@@ -78,12 +78,18 @@ implements ClientContract, Serializable
             }
             else 
             {   
-                // ! (3) download new file
-                contents = server_object.download(
-                    local_host_name,
-                    cache_entry.file_name,
-                    cache_entry.mode.toString());
-
+                if(cache_entry.state == ClientState.INVALID)
+                    // ! (3) download new file
+                    contents = server_object.download(
+                        local_host_name,
+                        cache_entry.file_name,
+                        cache_entry.mode.toString());
+                else
+                {
+                    // read shared > nothing
+                    // write owned > upload
+                        // then download
+                }
                 // store file into disk    
                 cache(contents);
             }
