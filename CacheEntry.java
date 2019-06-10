@@ -1,8 +1,12 @@
 
+import java.io.Serializable;
 
 class CacheEntry
+implements Serializable
 {
-    String file_name;
+    private static final long serialVersionUID = 4633270602881918086L;
+    
+	String file_name;
 
     CacheEntry(String file_name)
     {

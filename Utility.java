@@ -16,7 +16,7 @@ class Utility
              // to throw exceptions
             registry.list();
         }
-        catch (RemoteException e)
+        catch(Exception error)
         {
             // create registry
             Registry registry = LocateRegistry.createRegistry(host_port);

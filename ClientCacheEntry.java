@@ -1,8 +1,12 @@
+import java.io.Serializable;
 
 class ClientCacheEntry
 extends CacheEntry
+implements Serializable
 {
-    Mode mode;
+    private static final long serialVersionUID = 3351149849265363371L;
+
+	Mode mode;
     Boolean is_owner;
     ClientState state;
 
@@ -11,14 +15,28 @@ extends CacheEntry
         // call parent constructor
         super(file_name);
         
-        //
-        this.mode = Mode.valueOf(mode.toUpperCase().startsWith("W") ?
-            "READ_WRITE" : "READ");
+        // set mode
+        this.mode = mode.startsWith("w") ? Mode.READ_WRITE : Mode.READ;
         
-        //
+        // set owner status
         this.is_owner = this.mode == Mode.READ_WRITE ? true : false;
         
-        //
+        // set state
         this.state = ClientState.INVALID;
+    }
+
+    ClientCacheEntry(ClientCacheEntry other)
+    {
+        // call parent constructor
+        super(other.file_name);
+        
+        // copy mode
+        this.mode = other.mode;
+
+        // copy owner status
+        this.is_owner = other.is_owner;
+
+        // copy state
+        this.state = other.state;
     }
 }
