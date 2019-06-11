@@ -1,17 +1,14 @@
 
-import java.io.File;                            // used by in_cache
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.nio.file.Files;                     // used by write_back
-import java.nio.file.Paths;                     // used by write_back
-import java.io.Serializable;                    // for rmi
-import java.net.InetAddress;                    // used by constructor
-import java.rmi.Naming;                         // for rmi
-import java.rmi.RemoteException;                // for rmi
-import java.rmi.server.UnicastRemoteObject;     // for rmi
-import java.util.Scanner;                       // used by prompt_for
+import java.io.Serializable;
+import java.net.InetAddress;
+import java.rmi.Naming;
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+import java.util.Scanner;
 
 class Client
 extends UnicastRemoteObject
@@ -21,16 +18,16 @@ implements ClientContract, Serializable
     private static final long serialVersionUID = -5653266189145749167L;
 
     // static strings
-    private static final String PATH = "/tmp/%s";
-    private static final String PROGRAM = "notepad.exe %s %s";
+    private static final String CACHE_PATH = "/tmp/%s";
+    private static final String PROGRAM = "emacs %s %s";
     private static final String CHMOD = "chmod %d %s";
     private static final String STATE_FILE = "client.state";
 
-    //
+    // for user input
     private static Scanner input = new Scanner(System.in);
-    
+
     // instance variables
-    private String local_host_name;    
+    private String local_host_name;
     private ServerContract server_object;
     private ClientCacheEntry cache_entry;
 
@@ -41,7 +38,7 @@ implements ClientContract, Serializable
         {
             // get local host addresss
             this.local_host_name = InetAddress.getLocalHost().getHostName();
-            
+
             // get remote reference
             this.server_object = (ServerContract)Naming.lookup(String.format(
                 Utility.LOOKUP_SERVER,
@@ -50,10 +47,7 @@ implements ClientContract, Serializable
 
             // ! (1) user input
             this.cache_entry = new ClientCacheEntry(
-                prompt_for("file name"),
-                prompt_for("mode"));
-            
-            
+                    PromptFor("file name"), PromptFor("mode[r/w]"));
         }
         catch(Exception error)
         {
@@ -61,102 +55,104 @@ implements ClientContract, Serializable
         }
     }
 
-    void execute()
+    void Execute()
     {
         System.err.println("execute");// ! debug
 
         FileContents contents;
-        
+
         // run client
         try
-        {   
+        {
             // restore previous state if any
             //restore_state();
 
             // ! (2) file caching
-            if(in_cache(cache_entry.file_name))
-            {   
+            if(Utility.OnDisk(CACHE_PATH, cache_entry.file_name))
+            {
                 // ! (5) accessing cached file
                 // write owned -> run emacs
                 if(cache_entry.state == ClientState.WRITE_OWNED);
-                
+
                 // read shared + read -> run emacs
-                if(cache_entry.state == ClientState.READ_SHARED &&
+                else if(cache_entry.state == ClientState.READ_SHARED &&
                     cache_entry.mode == Mode.READ);
-                    
+
                 // read shared + write -> obtain ownership -> run emacs
-                if(cache_entry.state == ClientState.READ_SHARED &&
+                else if(cache_entry.state == ClientState.READ_SHARED &&
                     cache_entry.mode == Mode.READ_WRITE)
-                {   
+                {
                     //
-                    contents = server_object.download(
+                    contents = server_object.Download(
                         local_host_name,
                         cache_entry.file_name,
-                        cache_entry.mode.toString());
+                        cache_entry.mode);
 
                     //
                     cache_entry.state = ClientState.WRITE_OWNED;
                 }
             }
-            else 
-            {   
+
+            // not cached
+            else
+            {
                 // invalid -> download new file
                 if(cache_entry.state == ClientState.INVALID)
                 {
                     // ! (3) download new file
-                    contents = server_object.download(
+                    contents = server_object.Download(
                         local_host_name,
                         cache_entry.file_name,
-                        cache_entry.mode.toString());
+                        cache_entry.mode);
 
                     // state transition
-                    cache_entry.state = cache_entry.mode == Mode.READ_WRITE ? 
+                    cache_entry.state = cache_entry.mode == Mode.READ_WRITE ?
                         ClientState.WRITE_OWNED : ClientState.READ_SHARED;
                 }
 
-                // 
+                // valid file
                 else
-                {   
+                {
                     // ! (6) file replacement
                     // read shared -> nothing
                     if(cache_entry.state == ClientState.READ_SHARED);
 
                     // write owned -> upload
-                    if(cache_entry.state == ClientState.WRITE_OWNED)
-                        write_back();
-                    
+                    else if(cache_entry.state == ClientState.WRITE_OWNED)
+                        WriteBack();
+
                     // then download
-                    contents = server_object.download(
+                    contents = server_object.Download(
                         local_host_name,
                         cache_entry.file_name,
-                        cache_entry.mode.toString());
-                    
+                        cache_entry.mode);
+
                     // state transition
-                    cache_entry.state = cache_entry.mode == Mode.READ_WRITE ? 
+                    cache_entry.state = cache_entry.mode == Mode.READ_WRITE ?
                         ClientState.WRITE_OWNED : ClientState.READ_SHARED;
                 }
                 // store file into disk
-                cache(contents);
+                Cache(contents);
             }
             // ! (4) open with emacs
-            run_emacs();
-            
+            RunEmacs();
+
             // save state in disk
-            save_state();
+            SaveState();
         }
         catch(Exception error)
         {
             error.printStackTrace();
         }
-        
+
         System.err.println("exit execute");// ! debug
     }
 
-    void save_state()
+    void SaveState()
     {
         System.err.println("save_state");// ! debug
 
-        String path = String.format(PATH, STATE_FILE);
+        String path = String.format(CACHE_PATH, STATE_FILE);
 
         try(ObjectOutputStream state_stream = new ObjectOutputStream(
             new FileOutputStream(path)))
@@ -169,26 +165,13 @@ implements ClientContract, Serializable
         }
     }
 
-    /**
-     * in_cache checks the tmp directory for the specified file.
-     * @param file_name - File we are looking for in the /tmp directory
-     * @return - True if the file is tmp, false otherwise
-     */
-    boolean in_cache(String file_name)
+    private void Cache(FileContents contents)
     {
-        // create file instance
-        File check = new File(String.format(PATH, file_name));
-        
-        return check.exists();
-    }
+        String path = String.format(CACHE_PATH, cache_entry.file_name);
 
-    private void cache(FileContents contents)
-    {
-        String path = String.format(PATH, cache_entry.file_name);
-        
         // get file stream for this file
         try(FileOutputStream stream = new FileOutputStream(path))
-        {   
+        {
             // write all file contents to disk
             stream.write(contents.get());
         }
@@ -198,18 +181,18 @@ implements ClientContract, Serializable
         }
     }
 
-    private void restore_state()
+    private void RestoreState()
     {
         System.err.println("restore_state");// ! debug
 
-        String path = String.format(PATH, STATE_FILE);
-        
-        if(in_cache(STATE_FILE))
+        String path = String.format(CACHE_PATH, STATE_FILE);
+
+        if(Utility.OnDisk(CACHE_PATH, STATE_FILE))
         {
             try(ObjectInputStream state_stream = new ObjectInputStream(
                 new FileInputStream(path)))
             {
-                cache_entry.state = 
+                cache_entry.state =
                     ((ClientCacheEntry)state_stream.readObject()).state;
             }
             catch(Exception error)
@@ -219,7 +202,7 @@ implements ClientContract, Serializable
         }
     }
 
-    private String prompt_for(String sentence)
+    private String PromptFor(String sentence)
     {
         try
         {
@@ -234,20 +217,20 @@ implements ClientContract, Serializable
         return null;
     }
 
-    private void run_emacs()
+    private void RunEmacs()
     {
         System.err.println("run_emacs");// ! debug
 
-        String path = String.format(PATH, cache_entry.file_name);
+        String path = String.format(CACHE_PATH, cache_entry.file_name);
         // run emacs
-        try 
+        try
         {
             // get current runtime object
             Runtime runtime = Runtime.getRuntime();
-            
+
             // manage process
             Process process;
-            
+
             // execute chmod
             process = runtime.exec(
                 String.format(CHMOD, cache_entry.mode.permission, path));
@@ -255,40 +238,40 @@ implements ClientContract, Serializable
             // execute program
             process = runtime.exec(
                 String.format(PROGRAM, path, cache_entry.mode.options));
-            
+
             // wait for above process to terminate
             process.waitFor();
-        } 
+        }
         catch (Exception error)
         {
             error.printStackTrace();
         }
     }
 
-    public boolean invalidate() throws RemoteException
-    {   
+    public boolean Invalidate() throws RemoteException
+    {
         System.err.println("invalidate");// ! debug
 
         cache_entry.state = ClientState.INVALID;
-        
+
         return true;
     }
 
-    public boolean write_back() throws RemoteException
-    {   
+    public boolean WriteBack() throws RemoteException
+    {
         System.err.println("write_back");// ! debug
 
         // get bytes from file
         FileContents contents;
-        
+
         // write contents back to server
         try
         {
-            contents = new FileContents(Files.readAllBytes(
-                Paths.get(String.format(PATH, cache_entry.file_name))));
-            
+            contents = 
+                Utility.GetFileOnDisk(CACHE_PATH, cache_entry.file_name);
+
             // send to server
-            server_object.upload(
+            server_object.Upload(
                 local_host_name, cache_entry.file_name, contents);
 
             return true;
@@ -308,10 +291,10 @@ implements ClientContract, Serializable
             System.out.println("usage:java Client server_address access_port");
             System.exit(-1);
         }
-        
+
         // get server address
         String server_address = arguments[0];
-        
+
         // get access port number
         int access_port = Integer.parseInt(arguments[1]);
 
@@ -323,12 +306,12 @@ implements ClientContract, Serializable
 
             // start client and set up initial download
             Client client = new Client(server_address, access_port);
-            
+
             // bind object to name in registry
             Naming.rebind(
                 String.format(Utility.BIND_CLIENT, access_port), client);
-    
-            client.execute();
+
+            client.Execute();
         }
         catch(Exception error)
         {

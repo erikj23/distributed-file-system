@@ -4,7 +4,9 @@ import java.net.InetAddress;
 import java.rmi.Naming;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Vector;
 
 class Server
@@ -14,17 +16,23 @@ implements ServerContract, Serializable
     // serializable
     private static final long serialVersionUID = 5781815840427285195L;
 
+    // static strings
+    private static final String CACHE_PATH = "./.cache/%s";
+
+    // static variables
     private static int access_port;
     
     // instance variables
     private String local_host_name;
-    private List<ServerCacheEntry> cache_entries; 
+    //private List<ServerCacheEntry> cache_entries; 
+    private Map<String, ServerCacheEntry> cache_entries;
 
     Server() throws RemoteException
     {
-        cache_entries = new Vector<ServerCacheEntry>();
-        
-        //
+        // create cache entries structure
+        //cache_entries = new Vector<ServerCacheEntry>(0);
+        cache_entries = new HashMap<String, ServerCacheEntry>();
+        // set up local host
         try
         {
             // get local host name
@@ -36,22 +44,74 @@ implements ServerContract, Serializable
             error.printStackTrace();
         }
     }
-
-    void execute()
-    {
-
-    }
     
-    public FileContents download(String address, String file_name, String mode)
+    public FileContents Download(String user_address, String file_name, 
+        Mode mode)
     throws RemoteException
     {
-        // send
-        // create send
-        // ! debug
-        return new FileContents("testing text\n".getBytes());
+        // manage entry
+        ServerCacheEntry cache_entry;
+
+        // does server currently contain an entry
+        if(cache_entries.containsKey(file_name))
+        {   // ! dont forget to add to readers list!!
+            // get entry with that file name
+            cache_entry = cache_entries.get(file_name);
+
+            // not shared -> set r/w
+            if(cache_entry.state == ServerState.NOT_SHARED)
+                // set update reader list
+                cache_entry.Update(mode, user_address);
+            
+            // read shared -> set r/w (no current owner)
+            else if(cache_entry.state == ServerState.READ_SHARED)
+                // set state and update reader list
+                cache_entry.Update(mode, user_address);
+                
+            // write shared -> 
+            else if(cache_entry.state == ServerState.WRITE_SHARED)
+            {
+
+            }
+            
+            return cache_entries.get(file_name).contents;
+        }
+
+        // create new cache entry
+        else
+        {   
+            FileContents contents;
+    
+            // does the file system have the file on disk
+            if(Utility.OnDisk(CACHE_PATH, file_name))
+            {
+                // get contents from disk
+                contents = Utility.GetFileOnDisk(CACHE_PATH, file_name);
+                
+                // create entry
+                cache_entry = new ServerCacheEntry(user_address, file_name, 
+                    contents, mode);
+
+                // put entry in map
+                cache_entries.put(file_name, cache_entry);
+            }
+
+            // create empty file and add to entry
+            else
+            {
+                contents = new FileContents("testing text\n".getBytes());
+
+                cache_entry = new ServerCacheEntry(user_address, file_name, 
+                    contents, mode);
+
+                cache_entries.put(file_name, cache_entry);
+            }
+        }
+
+        return cache_entry.contents;
     }
 
-    public boolean upload(String address, String file_name, 
+    public boolean Upload(String address, String file_name, 
         FileContents contents)
     throws RemoteException
     {

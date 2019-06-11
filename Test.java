@@ -5,6 +5,16 @@ class Test
 {
     public static void main(String[] arguments) 
     {
+        //test_emacs();
+        
+    }
+
+    static void test_()
+    {
+        
+    }
+    static void test_emacs()
+    {
         try 
         {
             // get current runtime object
@@ -14,17 +24,15 @@ class Test
             Process process;
             
            // execute program
-            process = runtime.exec("code");
+            process = runtime.exec("emacs");
                 //String.format("emacs %s %s", "/tmp/test.txt", ""));
             
             // wait for above process to terminate
-            //process.waitFor();
+            process.waitFor();
         } 
         catch (Exception error)
         {
             error.printStackTrace();
         }
-
     }
-
 }

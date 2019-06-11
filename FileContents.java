@@ -8,7 +8,7 @@ implements Serializable
     private static final long serialVersionUID = -8990351271322235625L;
     // file contents
     private byte[] contents;
-
+    
     public FileContents(byte[] contents)
     {
         this.contents = contents;
@@ -18,7 +18,7 @@ implements Serializable
     {
         System.out.println("FileContents = " + contents);
     }
-
+    
     public byte[] get()
     {
         return contents;

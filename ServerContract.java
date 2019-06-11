@@ -5,9 +5,9 @@ import java.rmi.RemoteException;
 interface ServerContract
 extends Remote
 {
-    FileContents download(String address, String file_name, String mode) 
+    FileContents Download(String user_address, String file_name, Mode mode) 
     throws RemoteException;
     
-    boolean upload(String address, String file_name, FileContents contents) 
+    boolean Upload(String user_address, String file_name, FileContents contents) 
     throws RemoteException;
 }

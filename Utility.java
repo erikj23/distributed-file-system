@@ -1,4 +1,7 @@
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
@@ -11,6 +14,39 @@ class Utility
     static final String LOOKUP_SERVER = "rmi://%s:%d/server";
     static final String LOOKUP_CLIENT = "rmi://%s:%d/client";
 
+
+    /**
+     * OnDisk checks the tmp directory for the specified file.
+     * @param path_format - format string for directory to look in
+     * @param file_name - file we are looking for in the /tmp directory
+     * @return - true if the file is tmp, false otherwise
+     */
+    static boolean OnDisk(String path_format, String file_name)
+    {
+        // create file instance
+        File check = new File(String.format(path_format, file_name));
+        
+        return check.exists();
+    }
+
+    static FileContents GetFileOnDisk(String path_format, String file_name)
+    {
+        //
+        String path = String.format(path_format, file_name);
+        
+        //
+        try
+        {
+            //
+            return new FileContents(Files.readAllBytes(Paths.get(path)));
+        }
+        catch (Exception error)
+        {
+            error.printStackTrace();
+        }
+
+        return null;
+    }
 
     static void StartRegistry(int host_port) throws RemoteException
     {

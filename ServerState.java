@@ -1,8 +1,8 @@
 
 enum ServerState
 {
-    NOT_SHARED,
-    READ_SHARED,
-    WRITE_SHARED,
+    NOT_SHARED, // give to whoever
+    READ_SHARED, // give to whoever + invalidate if write
+    WRITE_SHARED, // change ownership
     OWNERSHIP_CHANGE;
 }
