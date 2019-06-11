@@ -1,11 +1,11 @@
 
 import java.io.Serializable;
+import java.net.InetAddress;
+import java.rmi.Naming;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.List;
 import java.util.Vector;
-import java.net.InetAddress;
-import java.rmi.Naming;
 
 class Server
 extends UnicastRemoteObject
