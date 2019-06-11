@@ -23,7 +23,7 @@ implements ServerContract, Serializable
     {
         // send
         // create send
-        return new FileContents("testing text".getBytes());
+        return new FileContents("testing text\n".getBytes());
     }
 
     public boolean upload(String address, String file_name, 

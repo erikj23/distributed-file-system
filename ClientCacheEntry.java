@@ -24,19 +24,4 @@ implements Serializable
         // set state
         this.state = ClientState.INVALID;
     }
-
-    ClientCacheEntry(ClientCacheEntry other)
-    {
-        // call parent constructor
-        super(other.file_name);
-        
-        // copy mode
-        this.mode = other.mode;
-
-        // copy owner status
-        this.is_owner = other.is_owner;
-
-        // copy state
-        this.state = other.state;
-    }
 }

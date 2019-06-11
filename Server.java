@@ -50,5 +50,6 @@ class Server
 
         // start a server
         Server server = new Server(arguments);
+        
     }
 }

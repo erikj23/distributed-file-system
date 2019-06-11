@@ -24,7 +24,7 @@ implements ClientContract, Serializable
     private static final String RMI_BIND = "rmi://localhost:%d/client";
     private static final String RMI_LOOKUP = "rmi://%s:%d/server";
     private static final String PATH = "/tmp/%s";
-    private static final String PROGRAM = "emacs %s %s";
+    private static final String PROGRAM = "notepad.exe %s %s";
     private static final String CHMOD = "chmod %d %s";
     private static final String STATE_FILE = "client.state";
 
@@ -65,6 +65,8 @@ implements ClientContract, Serializable
 
     void execute()
     {
+        System.err.println("execute");
+
         FileContents contents;
         
         // run client
@@ -148,10 +150,14 @@ implements ClientContract, Serializable
         {
             error.printStackTrace();
         }
+        
+        System.err.println("exit execute");
     }
 
     void save_state()
     {
+        System.err.println("save_state");
+
         String path = String.format(PATH, STATE_FILE);
 
         try(ObjectOutputStream state_stream = new ObjectOutputStream(
@@ -196,6 +202,8 @@ implements ClientContract, Serializable
 
     private void restore_state()
     {
+        System.err.println("restore_state");
+
         String path = String.format(PATH, STATE_FILE);
         
         if(in_cache(STATE_FILE))
@@ -218,7 +226,6 @@ implements ClientContract, Serializable
         try
         {
             System.out.printf("%s: ", sentence);
-            System.out.flush();
             String line = input.next();
             return line.toLowerCase();
         }
@@ -231,7 +238,9 @@ implements ClientContract, Serializable
 
     private void run_emacs()
     {
-        System.out.println("emacs");
+        System.err.println("run_emacs");
+
+        String path = String.format(PATH, cache_entry.file_name);
         // run emacs
         try 
         {
@@ -243,17 +252,11 @@ implements ClientContract, Serializable
             
             // execute chmod
             process = runtime.exec(
-                String.format(
-                    CHMOD, 
-                    cache_entry.mode.permission,
-                    cache_entry.file_name));
+                String.format(CHMOD, cache_entry.mode.permission, path));
 
             // execute program
             process = runtime.exec(
-                String.format(
-                    PROGRAM, 
-                    cache_entry.file_name, 
-                    cache_entry.mode.options));
+                String.format(PROGRAM, path, cache_entry.mode.options));
             
             // wait for above process to terminate
             process.waitFor();
@@ -266,6 +269,8 @@ implements ClientContract, Serializable
 
     public boolean invalidate() throws RemoteException
     {   
+        System.err.println("invalidate");
+
         cache_entry.state = ClientState.INVALID;
         
         return true;
@@ -273,6 +278,8 @@ implements ClientContract, Serializable
 
     public boolean write_back() throws RemoteException
     {
+        System.err.println("write_back");
+
         // get bytes from file
         FileContents contents;
         
@@ -327,5 +334,7 @@ implements ClientContract, Serializable
         {
             error.printStackTrace();
         }
+
+        System.exit(0);
     }
 }
