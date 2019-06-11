@@ -21,8 +21,6 @@ implements ClientContract, Serializable
     private static final long serialVersionUID = -5653266189145749167L;
 
     // static strings
-    private static final String RMI_BIND = "rmi://localhost:%d/client";
-    private static final String RMI_LOOKUP = "rmi://%s:%d/server";
     private static final String PATH = "/tmp/%s";
     private static final String PROGRAM = "notepad.exe %s %s";
     private static final String CHMOD = "chmod %d %s";
@@ -36,19 +34,19 @@ implements ClientContract, Serializable
     private ServerContract server_object;
     private ClientCacheEntry cache_entry;
 
-    Client(String server_address, int server_port) throws RemoteException
+    Client(String server_address, int access_port) throws RemoteException
     {
         // set up server object
-        try
+        try // todo change client.state to localhost+username.state
         {
             // get local host addresss
             this.local_host_name = InetAddress.getLocalHost().getHostName();
             
             // get remote reference
             this.server_object = (ServerContract)Naming.lookup(String.format(
-                RMI_LOOKUP,
+                Utility.LOOKUP_SERVER,
                 server_address,
-                server_port));
+                access_port));
 
             // ! (1) user input
             this.cache_entry = new ClientCacheEntry(
@@ -65,7 +63,7 @@ implements ClientContract, Serializable
 
     void execute()
     {
-        System.err.println("execute");
+        System.err.println("execute");// ! debug
 
         FileContents contents;
         
@@ -151,12 +149,12 @@ implements ClientContract, Serializable
             error.printStackTrace();
         }
         
-        System.err.println("exit execute");
+        System.err.println("exit execute");// ! debug
     }
 
     void save_state()
     {
-        System.err.println("save_state");
+        System.err.println("save_state");// ! debug
 
         String path = String.format(PATH, STATE_FILE);
 
@@ -202,7 +200,7 @@ implements ClientContract, Serializable
 
     private void restore_state()
     {
-        System.err.println("restore_state");
+        System.err.println("restore_state");// ! debug
 
         String path = String.format(PATH, STATE_FILE);
         
@@ -238,7 +236,7 @@ implements ClientContract, Serializable
 
     private void run_emacs()
     {
-        System.err.println("run_emacs");
+        System.err.println("run_emacs");// ! debug
 
         String path = String.format(PATH, cache_entry.file_name);
         // run emacs
@@ -269,7 +267,7 @@ implements ClientContract, Serializable
 
     public boolean invalidate() throws RemoteException
     {   
-        System.err.println("invalidate");
+        System.err.println("invalidate");// ! debug
 
         cache_entry.state = ClientState.INVALID;
         
@@ -277,8 +275,8 @@ implements ClientContract, Serializable
     }
 
     public boolean write_back() throws RemoteException
-    {
-        System.err.println("write_back");
+    {   
+        System.err.println("write_back");// ! debug
 
         // get bytes from file
         FileContents contents;
@@ -290,7 +288,8 @@ implements ClientContract, Serializable
                 Paths.get(String.format(PATH, cache_entry.file_name))));
             
             // send to server
-            server_object.upload(local_host_name, cache_entry.file_name, contents);
+            server_object.upload(
+                local_host_name, cache_entry.file_name, contents);
 
             return true;
         }
@@ -306,27 +305,28 @@ implements ClientContract, Serializable
         // verify argument quantity
         if (arguments.length != 2)
         {
-            System.out.println("usage:java Client server_address server_port");
+            System.out.println("usage:java Client server_address access_port");
             System.exit(-1);
         }
         
         // get server address
         String server_address = arguments[0];
         
-        // get server port number
-        int server_port = Integer.parseInt(arguments[1]);
+        // get access port number
+        int access_port = Integer.parseInt(arguments[1]);
 
         // create client
         try
         {
             // create registry for this remote client object
-            Utility.StartRegistry(server_port);
+            Utility.StartRegistry(access_port);
 
             // start client and set up initial download
-            Client client = new Client(server_address, server_port);
+            Client client = new Client(server_address, access_port);
             
             // bind object to name in registry
-            Naming.rebind(String.format(RMI_BIND, server_port), client);
+            Naming.rebind(
+                String.format(Utility.BIND_CLIENT, access_port), client);
     
             client.execute();
         }
