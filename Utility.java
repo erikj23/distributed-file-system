@@ -2,6 +2,8 @@
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.rmi.Naming;
+import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
@@ -13,7 +15,6 @@ class Utility
     static final String BIND_SERVER = "rmi://localhost:%d/server";
     static final String LOOKUP_SERVER = "rmi://%s:%d/server";
     static final String LOOKUP_CLIENT = "rmi://%s:%d/client";
-
 
     /**
      * OnDisk checks the tmp directory for the specified file.
@@ -64,6 +65,21 @@ class Utility
             // create registry
             Registry registry = LocateRegistry.createRegistry(host_port);
         }
+    }
+
+    static Remote Lookup(String target_format, String address, int access_port)
+    {
+        try
+        {
+            return Naming.lookup(String.format(target_format, address, 
+                access_port));
+        }
+        catch(Exception error)
+        {
+            error.printStackTrace(System.out);
+        }
+
+        return null;
     }
 
     static void Log(String output)

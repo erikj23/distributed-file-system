@@ -8,7 +8,6 @@ implements Serializable
     private static final long serialVersionUID = 3351149849265363371L;
 
 	Mode mode;
-    Boolean is_owner;
     ClientState state;
 
     ClientCacheEntry(String file_name, String mode)
@@ -18,11 +17,13 @@ implements Serializable
         
         // set mode
         this.mode = mode.startsWith("w") ? Mode.READ_WRITE : Mode.READ;
-        
-        // set owner status
-        this.is_owner = this.mode == Mode.READ_WRITE ? true : false;
-        
-        // set state
+       
         this.state = ClientState.INVALID;
+    }
+
+    void Update()
+    {
+        if(mode == Mode.READ_WRITE) state = ClientState.WRITE_OWNED;
+        else state = ClientState.READ_SHARED;
     }
 }

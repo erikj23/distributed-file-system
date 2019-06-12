@@ -1,7 +1,7 @@
 
 enum Mode
 {
-    READ("--eval '(setq buffer-read-only t)'", 400),
+    READ("-f view-mode", 400),
     READ_WRITE("", 600);
 
     String options;

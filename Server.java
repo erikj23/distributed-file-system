@@ -5,9 +5,7 @@ import java.rmi.Naming;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Vector;
 
 class Server
 extends UnicastRemoteObject
@@ -24,14 +22,17 @@ implements ServerContract, Serializable
     
     // instance variables
     private String local_host_name;
-    //private List<ServerCacheEntry> cache_entries; 
     private Map<String, ServerCacheEntry> cache_entries;
+    private Object lock; 
 
     Server() throws RemoteException
     {
         // create cache entries structure
-        //cache_entries = new Vector<ServerCacheEntry>(0);
         cache_entries = new HashMap<String, ServerCacheEntry>();
+
+        // initialize new lock
+        lock = new Object();
+
         // set up local host
         try
         {
@@ -45,8 +46,8 @@ implements ServerContract, Serializable
         }
     }
     
-    public FileContents Download(String user_address, String file_name, 
-        Mode mode)
+    public synchronized FileContents Download(String user_address, 
+        String file_name, Mode mode)
     throws RemoteException
     {
         // manage entry
@@ -54,13 +55,13 @@ implements ServerContract, Serializable
 
         // does server currently contain an entry
         if(cache_entries.containsKey(file_name))
-        {   // ! dont forget to add to readers list!!
-            // get entry with that file name
+        {   
+            // get entry with file name
             cache_entry = cache_entries.get(file_name);
 
             // not shared -> set r/w
             if(cache_entry.state == ServerState.NOT_SHARED)
-                // set update reader list
+                // update reader list
                 cache_entry.Update(mode, user_address);
             
             // read shared -> set r/w (no current owner)
@@ -68,12 +69,19 @@ implements ServerContract, Serializable
                 // set state and update reader list
                 cache_entry.Update(mode, user_address);
                 
-            // write shared -> 
+            // write shared -> write back
             else if(cache_entry.state == ServerState.WRITE_SHARED)
-            {
+            {   
+                // renew client before a write back
+                cache_entry.Renew(user_address, access_port);
 
+                // force write back and client state change
+                cache_entry.client_object.WriteBack();
+
+                // set state
+                cache_entry.Update(mode, user_address);
             }
-            
+            System.err.println(new String(cache_entries.get(file_name).contents.get())); // ! debug
             return cache_entries.get(file_name).contents;
         }
 
@@ -89,8 +97,8 @@ implements ServerContract, Serializable
                 contents = Utility.GetFileOnDisk(CACHE_PATH, file_name);
                 
                 // create entry
-                cache_entry = new ServerCacheEntry(user_address, file_name, 
-                    contents, mode);
+                cache_entry = new ServerCacheEntry(user_address, access_port, 
+                    file_name, contents, mode);
 
                 // put entry in map
                 cache_entries.put(file_name, cache_entry);
@@ -99,24 +107,53 @@ implements ServerContract, Serializable
             // create empty file and add to entry
             else
             {
-                contents = new FileContents("testing text\n".getBytes());
+                contents = new FileContents(new byte[0]);
 
-                cache_entry = new ServerCacheEntry(user_address, file_name, 
-                    contents, mode);
+                cache_entry = new ServerCacheEntry(user_address, access_port,
+                    file_name, contents, mode);
 
                 cache_entries.put(file_name, cache_entry);
             }
-        }
 
-        return cache_entry.contents;
+            return cache_entry.contents;
+        }
     }
 
-    public boolean Upload(String address, String file_name, 
+    public boolean Upload(String user_address, String file_name, 
         FileContents contents)
     throws RemoteException
     {
+        System.err.println("upload");// ! debug
+        ServerCacheEntry cache_entry = cache_entries.get(file_name);
         
-        return false;
+        // not shared -> no upload
+        if(cache_entry.state == ServerState.NOT_SHARED) return false;
+
+        // read shared -> no upload
+        else if(cache_entry.state == ServerState.READ_SHARED) return false;
+
+        // owner change or write shared -> invalidate and write contents
+        else
+        {
+            ClientContract remote;
+            System.err.println("before invalidation");// ! debug
+            for(String reader : cache_entry.reader_addresses)
+            {
+                System.err.println(reader); // ! debug
+                remote = (ClientContract)Utility.Lookup(Utility.LOOKUP_CLIENT,
+                    reader, access_port);
+                
+                remote.Invalidate();
+            }
+            System.err.println("after invalidation");// ! debug
+            // empty reader set
+            cache_entry.reader_addresses.clear();
+
+
+            cache_entry.contents = contents;
+
+            return true;
+        }
     }
 
     public static void main(String[] arguments)
