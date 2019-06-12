@@ -10,4 +10,6 @@ extends Remote
     
     boolean Upload(String user_address, String file_name, FileContents contents) 
     throws RemoteException;
+
+    void Clean(String file_name) throws RemoteException;
 }

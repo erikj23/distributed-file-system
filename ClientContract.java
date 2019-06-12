@@ -7,4 +7,5 @@ extends Remote
 {
     boolean Invalidate() throws RemoteException;
     boolean WriteBack() throws RemoteException;
+    void Shutdown() throws RemoteException;
 }

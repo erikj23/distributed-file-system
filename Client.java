@@ -34,6 +34,7 @@ implements ClientContract, Serializable
     
     Client(String server_address, int access_port) throws RemoteException
     {
+        System.err.println("new client");// ! debug
         // set up server object
         try // todo change client.state to localhost+username.state
         {
@@ -59,115 +60,18 @@ implements ClientContract, Serializable
         }
     }
 
-    void Execute2()
-    {
-        System.err.println("execute");// ! debug
-
-        FileContents contents;
-        // todo refactor logic to mainly utilize state for branching
-        // run client
-        try
-        {
-            System.err.println(cache_entry.state.toString()); // ! debug
-            // restore previous state if any
-            RestoreState();
-            System.err.println(cache_entry.state.toString()); // ! debug
-
-            // ! (2) file caching
-            if(Utility.OnDisk(CACHE_PATH, cache_entry.file_name))
-            {
-                // ! (5) accessing cached file
-                // write owned -> run emacs
-                if(cache_entry.state == ClientState.WRITE_OWNED);
-
-                // read shared + read -> run emacs
-                else if(cache_entry.state == ClientState.READ_SHARED &&
-                    cache_entry.mode == Mode.READ);
-
-                // read shared + write -> obtain ownership -> run emacs
-                else if(cache_entry.state == ClientState.READ_SHARED &&
-                    cache_entry.mode == Mode.READ_WRITE)
-                {
-                    //
-                    contents = server_object.Download(
-                        local_host_name,
-                        cache_entry.file_name,
-                        cache_entry.mode);
-
-                    //
-                    cache_entry.state = ClientState.WRITE_OWNED;
-                }
-            }
-
-            // not cached
-            else
-            {
-                // invalid -> download new file
-                if(cache_entry.state == ClientState.INVALID)
-                {
-                    // ! (3) download new file
-                    contents = server_object.Download(
-                        local_host_name,
-                        cache_entry.file_name,
-                        cache_entry.mode);
-
-                    // state transition
-                    cache_entry.state = cache_entry.mode == Mode.READ_WRITE ?
-                        ClientState.WRITE_OWNED : ClientState.READ_SHARED;
-                }
-
-                // valid file
-                else
-                {
-                    // ! (6) file replacement
-                    // read shared -> nothing
-                    if(cache_entry.state == ClientState.READ_SHARED);
-
-                    // write owned -> upload
-                    else if(cache_entry.state == ClientState.WRITE_OWNED)
-                        LocalWriteBack();
-
-                    // then download
-                    contents = server_object.Download(
-                        local_host_name,
-                        cache_entry.file_name,
-                        cache_entry.mode);
-
-                    // state transition
-                    cache_entry.state = cache_entry.mode == Mode.READ_WRITE ?
-                        ClientState.WRITE_OWNED : ClientState.READ_SHARED;
-                }
-                // store file into disk
-                Cache(contents);
-            }
-            // ! (4) open with emacs
-            RunEmacs();
-
-            // save state in disk
-            SaveState();
-        }
-        catch(Exception error)
-        {
-            error.printStackTrace();
-        }
-
-        System.err.println("exit execute");// ! debug
-    }
-
     void Execute()
     {
         System.err.println("execute");// ! debug
 
-        FileContents contents;
+        FileContents contents = null;
         // todo refactor logic to mainly utilize state for branching
         // run client
         try
         {
-            System.err.println(cache_entry.state.toString()); // ! debug
             // restore previous state if any
-            RestoreState();
-            System.err.println(cache_entry.state.toString()); // ! debug
-
+            //RestoreState();
+            
             // ! (2) file caching
             if(Utility.OnDisk(CACHE_PATH, cache_entry.file_name))
             {
@@ -181,7 +85,7 @@ implements ClientContract, Serializable
                         cache_entry.mode);
 
                     // store file into disk
-                    Cache(contents);  
+                    System.err.printf("1contents[%s]\n", new String(contents.get()));// ! debug
                 }
 
                 //
@@ -195,13 +99,11 @@ implements ClientContract, Serializable
                             cache_entry.mode);
 
                         // store file into disk
-                        Cache(contents);  
+                        System.err.printf("2contents[%s]\n", new String(contents.get()));// ! debug
                     }
 
                 // write back anyway and open
                 else LocalWriteBack();
-
-                cache_entry.Update();
             }
 
             // not cached
@@ -218,35 +120,43 @@ implements ClientContract, Serializable
                     cache_entry.mode);
                     
                 // store file into disk
-                Cache(contents);  
+                System.err.printf("3contents[%s]\n", new String(contents.get()));// ! debug
             }  
-            
+            // 
+            cache_entry.Update();
             // ! (4) open with emacs
-            RunEmacs();
+            RunEmacs(contents);
 
             // save state in disk
-            SaveState();
+            // SaveState();
         }
         catch(Exception error)
         {
             error.printStackTrace();
         }
 
-        System.err.println("exit execute");// ! debug
+        // attempt to shutdown
+        try 
+        {
+            // shutdown if no one depends on this client
+            Shutdown();
+        }
+        catch (Exception error)
+        {
+            error.printStackTrace();
+        }
     }
-
-
 
     void SaveState()
     {
-        System.err.println("save state");// ! debug
+        System.err.printf("save state %s\n", cache_entry.state); // ! debug
 
         String path = String.format(CACHE_PATH, state_file);
 
-        try(ObjectOutputStream state_stream = new ObjectOutputStream(
+        try(ObjectOutputStream stream = new ObjectOutputStream(
             new FileOutputStream(path)))
         {
-            state_stream.writeObject(cache_entry);
+            stream.writeObject(cache_entry);
         }
         catch(Exception error)
         {
@@ -257,7 +167,7 @@ implements ClientContract, Serializable
     private void Cache(FileContents contents)
     {
         String path = String.format(CACHE_PATH, cache_entry.file_name);
-        System.out.println(path); // ! debug
+        System.out.printf("cache %s\n", path); // ! debug
         // get file stream for this file
         try(FileOutputStream stream = new FileOutputStream(path))
         {
@@ -272,23 +182,31 @@ implements ClientContract, Serializable
 
     private void RestoreState()
     {
-        System.err.println("restore state");// ! debug
-
+        System.err.printf("restore state [%s->", cache_entry.state);// ! debug
         String path = String.format(CACHE_PATH, state_file);
+        
 
         if(Utility.OnDisk(CACHE_PATH, state_file))
         {
-            try(ObjectInputStream state_stream = new ObjectInputStream(
+            try(ObjectInputStream stream = new ObjectInputStream(
                 new FileInputStream(path)))
             {
-                cache_entry.state =
-                    ((ClientCacheEntry)state_stream.readObject()).state;
+                // retrieve object from disk
+                ClientCacheEntry disk_entry = 
+                    (ClientCacheEntry)stream.readObject();
+                
+                // copy values over
+                cache_entry.file_name = disk_entry.file_name;
+                //cache_entry.mode = disk_entry.mode;
+                cache_entry.state = disk_entry.state;
+
             }
             catch(Exception error)
             {
                 error.printStackTrace();
             }
         }
+        System.err.printf("%s]\n", cache_entry.state);// ! debug
     }
 
     private String PromptFor(String sentence)
@@ -306,7 +224,7 @@ implements ClientContract, Serializable
         return null;
     }
 
-    private void RunEmacs()
+    private void RunEmacs(FileContents contents)
     {
         System.err.println("run emacs");// ! debug
 
@@ -323,6 +241,12 @@ implements ClientContract, Serializable
             // execute chmod
             process = runtime.exec(
                 String.format(CHMOD, cache_entry.mode.permission, path));
+            
+            // store file into disk
+            Cache(contents);  
+
+            // clean open clients
+            server_object.Clean(cache_entry.file_name);
 
             // execute program
             process = runtime.exec(
@@ -337,15 +261,6 @@ implements ClientContract, Serializable
         }
     }
 
-    public boolean Invalidate() throws RemoteException
-    {
-        System.err.println("invalidate");// ! debug
-
-        cache_entry.state = ClientState.INVALID;
-
-        return true;
-    }
-
     boolean LocalWriteBack()
     {
         System.err.println("local write back");// ! debug
@@ -356,15 +271,13 @@ implements ClientContract, Serializable
         // write contents back to server
         try
         {
-            System.err.println("before retrieve");// ! debug
             contents = 
                 Utility.GetFileOnDisk(CACHE_PATH, cache_entry.file_name);
-            contents.print(); // ! debug
-            System.err.println("retrieve | before upload");// ! debug
+            
             // send to server
             server_object.Upload(
                 local_host_name, cache_entry.file_name, contents);
-            System.err.println("upload");// ! debug
+            
             return true;
         }
         catch(Exception error)
@@ -373,6 +286,21 @@ implements ClientContract, Serializable
         }
         return false;
     }
+
+    public void Shutdown() throws RemoteException
+    {
+        if(cache_entry.state == ClientState.READ_SHARED) System.exit(0);
+    }
+
+    public boolean Invalidate() throws RemoteException
+    {
+        System.err.println("invalidate");// ! debug
+
+        cache_entry.state = ClientState.INVALID;
+
+        return true;
+    }
+
 
     public boolean WriteBack() throws RemoteException
     {
@@ -417,7 +345,5 @@ implements ClientContract, Serializable
         {
             error.printStackTrace();
         }
-
-        System.exit(0);
     }
 }

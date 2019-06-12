@@ -32,6 +32,7 @@ class Utility
 
     static FileContents GetFileOnDisk(String path_format, String file_name)
     {
+        System.err.printf("get[%s]\n", file_name);// ! debug
         //
         String path = String.format(path_format, file_name);
         
@@ -49,26 +50,45 @@ class Utility
         return null;
     }
 
-    static void StartRegistry(int host_port) throws RemoteException
+    static void StartRegistry(int host_port)
     {
-        // try to fetch or create registry
-        try
+        System.err.println("registry started");// ! debug
+
+        Thread thread = new Thread(new Runnable()
         {
-            // find registry
-            Registry registry = LocateRegistry.getRegistry(host_port);
-            
-             // to throw exceptions
-            registry.list();
-        }
-        catch(Exception error)
-        {
-            // create registry
-            Registry registry = LocateRegistry.createRegistry(host_port);
-        }
+            public void run()
+            {
+                // try to fetch or create registry
+                try
+                {
+                    // find registry
+                    Registry registry = LocateRegistry.getRegistry(host_port);
+                    
+                    // to throw exceptions
+                    registry.list();
+                }
+                catch(Exception error)
+                {
+                    try
+                    {
+                        // create registry
+                        Registry registry = LocateRegistry.createRegistry(host_port);
+                    }
+                    catch(Exception nested_error)
+                    {
+                        nested_error.printStackTrace();
+                    }
+                }        
+            }
+        });
+
+        thread.start();
     }
 
     static Remote Lookup(String target_format, String address, int access_port)
     {
+        System.err.printf("lookup[%s]\n", address);// ! debug
+
         try
         {
             return Naming.lookup(String.format(target_format, address, 

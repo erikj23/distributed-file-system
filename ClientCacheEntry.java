@@ -14,6 +14,7 @@ implements Serializable
     {
         // call parent constructor
         super(file_name);
+        System.err.println("new client cache entry");// ! debug
         
         // set mode
         this.mode = mode.startsWith("w") ? Mode.READ_WRITE : Mode.READ;

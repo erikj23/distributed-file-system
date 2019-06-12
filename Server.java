@@ -23,15 +23,13 @@ implements ServerContract, Serializable
     // instance variables
     private String local_host_name;
     private Map<String, ServerCacheEntry> cache_entries;
-    private Object lock; 
 
     Server() throws RemoteException
-    {
+    {   
+        System.err.println("new server");// ! debug
+        
         // create cache entries structure
         cache_entries = new HashMap<String, ServerCacheEntry>();
-
-        // initialize new lock
-        lock = new Object();
 
         // set up local host
         try
@@ -50,12 +48,14 @@ implements ServerContract, Serializable
         String file_name, Mode mode)
     throws RemoteException
     {
+        System.err.printf("download[%s]\n", user_address);// ! debug
         // manage entry
         ServerCacheEntry cache_entry;
 
         // does server currently contain an entry
         if(cache_entries.containsKey(file_name))
         {   
+            System.err.println("in map");// ! debug
             // get entry with file name
             cache_entry = cache_entries.get(file_name);
 
@@ -72,22 +72,20 @@ implements ServerContract, Serializable
             // write shared -> write back
             else if(cache_entry.state == ServerState.WRITE_SHARED)
             {   
-                // renew client before a write back
-                cache_entry.Renew(user_address, access_port);
-
-                // force write back and client state change
-                cache_entry.client_object.WriteBack();
-
-                // set state
+                // prepare transfer of ownership
+                cache_entry.ReleaseOwnership();
+                
+                // set new owner and state
                 cache_entry.Update(mode, user_address);
             }
-            System.err.println(new String(cache_entries.get(file_name).contents.get())); // ! debug
+            System.err.printf("contents[%s]\n", new String(cache_entries.get(file_name).contents.get()));// ! debug
             return cache_entries.get(file_name).contents;
         }
 
         // create new cache entry
         else
         {   
+            System.err.println("not in map");// ! debug
             FileContents contents;
     
             // does the file system have the file on disk
@@ -114,7 +112,7 @@ implements ServerContract, Serializable
 
                 cache_entries.put(file_name, cache_entry);
             }
-
+            System.err.printf("contents[%s]\n", new String(cache_entries.get(file_name).contents.get())); // ! debug
             return cache_entry.contents;
         }
     }
@@ -123,7 +121,7 @@ implements ServerContract, Serializable
         FileContents contents)
     throws RemoteException
     {
-        System.err.println("upload");// ! debug
+        System.err.printf("upload[%s]\n", user_address);// ! debug
         ServerCacheEntry cache_entry = cache_entries.get(file_name);
         
         // not shared -> no upload
@@ -134,26 +132,30 @@ implements ServerContract, Serializable
 
         // owner change or write shared -> invalidate and write contents
         else
-        {
+        {   
             ClientContract remote;
-            System.err.println("before invalidation");// ! debug
-            for(String reader : cache_entry.reader_addresses)
+            
+            // invalidate active readers 
+            for(String reader : cache_entry.active_reader_addresses)
             {
-                System.err.println(reader); // ! debug
-                remote = (ClientContract)Utility.Lookup(Utility.LOOKUP_CLIENT,
-                    reader, access_port);
-                
+                remote = cache_entry.Renew(reader);
                 remote.Invalidate();
             }
-            System.err.println("after invalidation");// ! debug
+            
             // empty reader set
-            cache_entry.reader_addresses.clear();
+            cache_entry.active_reader_addresses.clear();
 
-
+            // store new contents
             cache_entry.contents = contents;
 
             return true;
         }
+    }
+
+    public void Clean(String file_name) throws RemoteException
+    {
+        ServerCacheEntry cache_entry = cache_entries.get(file_name);
+        cache_entry.CloseInactives();
     }
 
     public static void main(String[] arguments)
@@ -173,17 +175,13 @@ implements ServerContract, Serializable
         {
             // start registery on localhost on this port
             Utility.StartRegistry(access_port);
-            Utility.Log("registry started");
-
+            
             // create a remote server object that implements server interface
             Server server = new Server();
-            Utility.Log("remote object created");
-
+            
             // bind name to object in registry
             Naming.rebind(
                 String.format(Utility.BIND_SERVER, access_port), server);
-            Utility.Log("bound");
-            
         }
         catch (Exception error)
         {
