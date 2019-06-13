@@ -1,5 +1,6 @@
 
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -14,7 +15,7 @@ implements Serializable
     FileContents contents;
     ServerState state;
     String owner_address;
-    ClientContract client_object; // todo add initialization
+    ClientContract client_object;
 
     private int access_port;
     
@@ -77,22 +78,25 @@ implements Serializable
         }
         
         // transfer client
-        closable_addresses.add(owner_address);
-
+        if(owner_address != null) closable_addresses.add(owner_address);
+        
         // and remove from readerlist
-        if(active_reader_addresses.contains(owner_address))
-            active_reader_addresses.remove(owner_address);
+        active_reader_addresses.remove(owner_address);
     }
 
     void CloseInactives()
     {
+        System.err.println("close inactives");// ! debug
+        
         ClientContract remote;
-
+        
         for(String open_client : closable_addresses)
-        {
+        {   // remove open clientss
+            active_reader_addresses.remove(open_client);
+            
             //
             remote = Renew(open_client);
-
+            
             //
             try 
             {
@@ -100,10 +104,12 @@ implements Serializable
                 remote.Shutdown();
             }
             catch (Exception error)
-            {   // * will always get unmarshalling error
+            {   // * will always get unmarshalling error on shutdown
                 //error.printStackTrace();
             }
         }
+        System.err.println(Arrays.toString(active_reader_addresses.toArray()));// ! debug
+        System.err.println(Arrays.toString(closable_addresses.toArray()));// ! debug
     }
 
     ClientContract Renew(String user_address)

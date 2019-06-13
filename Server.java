@@ -59,25 +59,12 @@ implements ServerContract, Serializable
             // get entry with file name
             cache_entry = cache_entries.get(file_name);
 
-            // not shared -> set r/w
-            if(cache_entry.state == ServerState.NOT_SHARED)
-                // update reader list
-                cache_entry.Update(mode, user_address);
-            
-            // read shared -> set r/w (no current owner)
-            else if(cache_entry.state == ServerState.READ_SHARED)
-                // set state and update reader list
-                cache_entry.Update(mode, user_address);
+            // prepare transfer of ownership
+            cache_entry.ReleaseOwnership();
                 
-            // write shared -> write back
-            else if(cache_entry.state == ServerState.WRITE_SHARED)
-            {   
-                // prepare transfer of ownership
-                cache_entry.ReleaseOwnership();
-                
-                // set new owner and state
-                cache_entry.Update(mode, user_address);
-            }
+            // set new owner and state
+            cache_entry.Update(mode, user_address);
+
             System.err.printf("contents[%s]\n", new String(cache_entries.get(file_name).contents.get()));// ! debug
             return cache_entries.get(file_name).contents;
         }
@@ -121,8 +108,8 @@ implements ServerContract, Serializable
         FileContents contents)
     throws RemoteException
     {
-        System.err.printf("upload[%s]\n", user_address);// ! debug
         ServerCacheEntry cache_entry = cache_entries.get(file_name);
+        System.err.printf("upload[%s@%s]\n", user_address, cache_entry.state);// ! debug
         
         // not shared -> no upload
         if(cache_entry.state == ServerState.NOT_SHARED) return false;
@@ -135,11 +122,13 @@ implements ServerContract, Serializable
         {   
             ClientContract remote;
             
+            
+
             // invalidate active readers 
             for(String reader : cache_entry.active_reader_addresses)
-            {
+            {   System.err.println(reader);// ! debug
                 remote = cache_entry.Renew(reader);
-                remote.Invalidate();
+                if(remote != null) remote.Invalidate();
             }
             
             // empty reader set

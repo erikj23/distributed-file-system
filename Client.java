@@ -23,11 +23,13 @@ implements ClientContract, Serializable
     private static final String CHMOD = "chmod %d %s";
     //private static String file_name;
     private static String state_file;
-
+    
     // for user input
     private static Scanner input = new Scanner(System.in);
-
+    
     // instance variables
+    private String user_name;
+    //private String file_name;
     private String local_host_name;
     private ServerContract server_object;
     private ClientCacheEntry cache_entry;
@@ -46,13 +48,15 @@ implements ClientContract, Serializable
                 Utility.LOOKUP_SERVER,
                 server_address,
                 access_port));
-
-            // ! (1) user input
-            this.cache_entry = new ClientCacheEntry(
-                    PromptFor("file name"), PromptFor("mode[r/w]"));
-
-            //System.getProperty("user.name");
+                
+            // static asignment
             state_file = String.format("%s.state", local_host_name);
+            
+            // targets for instance
+            this.user_name = System.getProperty("user.name");
+                            
+            // ! (1) user input
+            this.cache_entry = new ClientCacheEntry(PromptFor("file name"), PromptFor("mode[r/w]"));
         }
         catch(Exception error)
         {
@@ -65,15 +69,18 @@ implements ClientContract, Serializable
         System.err.println("execute");// ! debug
 
         FileContents contents = null;
-        // todo refactor logic to mainly utilize state for branching
+        // todo upload on not in cache
         // run client
         try
         {
             // restore previous state if any
-            //RestoreState();
+            RestoreState();
             
+            // 
+            cache_entry.Update();
+
             // ! (2) file caching
-            if(Utility.OnDisk(CACHE_PATH, cache_entry.file_name))
+            if(Utility.OnDisk(CACHE_PATH, user_name))
             {
                 //
                 if(cache_entry.state == ClientState.INVALID)
@@ -101,9 +108,6 @@ implements ClientContract, Serializable
                         // store file into disk
                         System.err.printf("2contents[%s]\n", new String(contents.get()));// ! debug
                     }
-
-                // write back anyway and open
-                else LocalWriteBack();
             }
 
             // not cached
@@ -111,7 +115,7 @@ implements ClientContract, Serializable
             {
                 //
                 if(cache_entry.state == ClientState.WRITE_OWNED)
-                    LocalWriteBack();
+                    LocalWriteBack(cache_entry.file_name);
 
                 //
                 contents = server_object.Download(
@@ -122,13 +126,12 @@ implements ClientContract, Serializable
                 // store file into disk
                 System.err.printf("3contents[%s]\n", new String(contents.get()));// ! debug
             }  
-            // 
-            cache_entry.Update();
+            
             // ! (4) open with emacs
             RunEmacs(contents);
 
             // save state in disk
-            // SaveState();
+            SaveState();
         }
         catch(Exception error)
         {
@@ -143,7 +146,7 @@ implements ClientContract, Serializable
         }
         catch (Exception error)
         {
-            error.printStackTrace();
+            // error.printStackTrace();
         }
     }
 
@@ -166,7 +169,7 @@ implements ClientContract, Serializable
 
     private void Cache(FileContents contents)
     {
-        String path = String.format(CACHE_PATH, cache_entry.file_name);
+        String path = String.format(CACHE_PATH, user_name);
         System.out.printf("cache %s\n", path); // ! debug
         // get file stream for this file
         try(FileOutputStream stream = new FileOutputStream(path))
@@ -175,17 +178,15 @@ implements ClientContract, Serializable
             stream.write(contents.get());
         }
         catch(Exception error)
-        {
+        {   // * permission error will trigger stack trace
             error.printStackTrace();
         }
     }
 
     private void RestoreState()
     {
-        System.err.printf("restore state [%s->", cache_entry.state);// ! debug
         String path = String.format(CACHE_PATH, state_file);
         
-
         if(Utility.OnDisk(CACHE_PATH, state_file))
         {
             try(ObjectInputStream stream = new ObjectInputStream(
@@ -194,10 +195,14 @@ implements ClientContract, Serializable
                 // retrieve object from disk
                 ClientCacheEntry disk_entry = 
                     (ClientCacheEntry)stream.readObject();
+
+                //
+                if(disk_entry != null) 
+                    if(cache_entry.file_name != disk_entry.file_name &&
+                        disk_entry.state == ClientState.WRITE_OWNED)
+                        LocalWriteBack(disk_entry.file_name);
                 
                 // copy values over
-                cache_entry.file_name = disk_entry.file_name;
-                //cache_entry.mode = disk_entry.mode;
                 cache_entry.state = disk_entry.state;
 
             }
@@ -206,7 +211,6 @@ implements ClientContract, Serializable
                 error.printStackTrace();
             }
         }
-        System.err.printf("%s]\n", cache_entry.state);// ! debug
     }
 
     private String PromptFor(String sentence)
@@ -228,7 +232,7 @@ implements ClientContract, Serializable
     {
         System.err.println("run emacs");// ! debug
 
-        String path = String.format(CACHE_PATH, cache_entry.file_name);
+        String path = String.format(CACHE_PATH, user_name);
         // run emacs
         try
         {
@@ -243,17 +247,17 @@ implements ClientContract, Serializable
                 String.format(CHMOD, cache_entry.mode.permission, path));
             
             // store file into disk
-            Cache(contents);  
-
-            // clean open clients
-            server_object.Clean(cache_entry.file_name);
-
+            if(contents != null) Cache(contents);  
+            
             // execute program
             process = runtime.exec(
                 String.format(PROGRAM, path, cache_entry.mode.options));
 
             // wait for above process to terminate
             process.waitFor();
+                
+            // clean open clients
+            // server_object.Clean(cache_entry.file_name);
         }
         catch (Exception error)
         {
@@ -261,7 +265,7 @@ implements ClientContract, Serializable
         }
     }
 
-    boolean LocalWriteBack()
+    boolean LocalWriteBack(String name_on_server)
     {
         System.err.println("local write back");// ! debug
 
@@ -272,11 +276,11 @@ implements ClientContract, Serializable
         try
         {
             contents = 
-                Utility.GetFileOnDisk(CACHE_PATH, cache_entry.file_name);
+                Utility.GetFileOnDisk(CACHE_PATH, user_name);
             
             // send to server
             server_object.Upload(
-                local_host_name, cache_entry.file_name, contents);
+                local_host_name, name_on_server, contents);
             
             return true;
         }
@@ -308,23 +312,23 @@ implements ClientContract, Serializable
 
         cache_entry.state = ClientState.READ_SHARED; // ? does rmi cache
 
-        return LocalWriteBack();
+        return LocalWriteBack(cache_entry.file_name);
     }
 
     public static void main(String[] arguments)
     {
         // verify argument quantity
-        if (arguments.length != 2)
-        {
-            System.out.println("usage:java Client server_address access_port");
-            System.exit(-1);
-        }
+        //if (arguments.length != 2)
+        //{
+        //    System.out.println("usage:java Client server_address access_port");
+        //    System.exit(-1);
+        //}
 
         // get server address
-        String server_address = arguments[0];
+        String server_address = "cssmpi1.uwb.edu";
 
         // get access port number
-        int access_port = Integer.parseInt(arguments[1]);
+        int access_port = 22384;
 
         // create client
         try

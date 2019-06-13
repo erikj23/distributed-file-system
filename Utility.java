@@ -32,9 +32,9 @@ class Utility
 
     static FileContents GetFileOnDisk(String path_format, String file_name)
     {
-        System.err.printf("get[%s]\n", file_name);// ! debug
         //
         String path = String.format(path_format, file_name);
+        System.err.printf("get[%s]\n", path);// ! debug
         
         //
         try
