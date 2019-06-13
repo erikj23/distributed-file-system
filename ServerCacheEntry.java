@@ -1,7 +1,9 @@
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 class ServerCacheEntry
@@ -10,8 +12,8 @@ implements Serializable
 {
     private static final long serialVersionUID = 3950852135815365213L;
 
-    Set<String> active_reader_addresses;
-    Set<String> closable_addresses;
+    List<String> active_reader_addresses;
+    List<String> closable_addresses;
     FileContents contents;
     ServerState state;
     String owner_address;
@@ -27,13 +29,15 @@ implements Serializable
         System.err.println("new server cache entry");// ! debug
         
         // set initial empty reader addresses
-        this.active_reader_addresses = new HashSet<String>();
-        this.closable_addresses = new HashSet<String>();
+        this.active_reader_addresses = new ArrayList<String>();
+        this.closable_addresses = new ArrayList<String>();
 
         // set contents
         this.contents = contents;
 
         this.access_port = access_port;
+
+        this.state = ServerState.NOT_SHARED;
 
         this.Update(mode, user_address);
 
@@ -42,9 +46,19 @@ implements Serializable
 
     void Update(Mode mode, String user_address)
     {
-        state = (mode == Mode.READ) ? ServerState.READ_SHARED : 
-            ServerState.WRITE_SHARED; 
-        
+        //
+        if(state == ServerState.NOT_SHARED)
+        {
+            state = (mode == Mode.READ) ? ServerState.READ_SHARED : 
+                ServerState.WRITE_SHARED; 
+        }
+
+        //
+        else if(state == ServerState.READ_SHARED)
+        {
+            if(mode == Mode.READ_WRITE) state = ServerState.WRITE_SHARED;
+        }
+
         //
         if(state == ServerState.WRITE_SHARED)
         {   
@@ -63,11 +77,14 @@ implements Serializable
     void ReleaseOwnership()
     {
         // renew current owner remote object
-        Renew(owner_address);
+        System.err.println(Arrays.toString(active_reader_addresses.toArray()));// ! debug
+        System.err.println(Arrays.toString(closable_addresses.toArray()));// ! debug
+        System.err.printf("renew[%s]\n", owner_address);// ! debug
+
+        if(owner_address == null) Renew(active_reader_addresses.get(0));
+        else Renew(owner_address);
 
         // force write back and client state change
-        System.err.printf("writeback[%s]\n", owner_address);// ! debug
-        
         try
         {
             client_object.WriteBack();   

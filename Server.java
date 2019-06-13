@@ -48,24 +48,21 @@ implements ServerContract, Serializable
         String file_name, Mode mode)
     throws RemoteException
     {
-        System.err.printf("download[%s]\n", user_address);// ! debug
         // manage entry
         ServerCacheEntry cache_entry;
-
+        System.err.printf("mode[%s]\n", mode);// ! debug
         // does server currently contain an entry
         if(cache_entries.containsKey(file_name))
         {   
             System.err.println("in map");// ! debug
             // get entry with file name
-            cache_entry = cache_entries.get(file_name);
-
             // prepare transfer of ownership
-            cache_entry.ReleaseOwnership();
-                
-            // set new owner and state
+            cache_entry = cache_entries.get(file_name);
             cache_entry.Update(mode, user_address);
-
+            
+            System.err.printf("download[%s@%s]\n", user_address, cache_entry.state);// ! debug
             System.err.printf("contents[%s]\n", new String(cache_entries.get(file_name).contents.get()));// ! debug
+
             return cache_entries.get(file_name).contents;
         }
 
@@ -109,6 +106,8 @@ implements ServerContract, Serializable
     throws RemoteException
     {
         ServerCacheEntry cache_entry = cache_entries.get(file_name);
+        cache_entry.ReleaseOwnership();
+    
         System.err.printf("upload[%s@%s]\n", user_address, cache_entry.state);// ! debug
         
         // not shared -> no upload
@@ -122,11 +121,10 @@ implements ServerContract, Serializable
         {   
             ClientContract remote;
             
-            
-
             // invalidate active readers 
             for(String reader : cache_entry.active_reader_addresses)
-            {   System.err.println(reader);// ! debug
+            {   
+                System.err.println(reader);// ! debug
                 remote = cache_entry.Renew(reader);
                 if(remote != null) remote.Invalidate();
             }

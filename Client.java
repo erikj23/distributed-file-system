@@ -97,6 +97,7 @@ implements ClientContract, Serializable
 
                 //
                 else if(cache_entry.state == ClientState.READ_SHARED) 
+                {
                     // ? delete
                     if(cache_entry.mode == Mode.READ_WRITE)
                     {
@@ -108,6 +109,15 @@ implements ClientContract, Serializable
                         // store file into disk
                         System.err.printf("2contents[%s]\n", new String(contents.get()));// ! debug
                     }
+                }
+
+                else
+                {
+                    contents = server_object.Download(
+                        local_host_name,
+                        cache_entry.file_name,
+                        cache_entry.mode);
+                }
             }
 
             // not cached
@@ -196,12 +206,10 @@ implements ClientContract, Serializable
                 ClientCacheEntry disk_entry = 
                     (ClientCacheEntry)stream.readObject();
 
+                //if(disk_entry != null) 
+                //    if(disk_entry.state == ClientState.WRITE_OWNED)
+                //        LocalWriteBack(disk_entry.file_name);
                 //
-                if(disk_entry != null) 
-                    if(cache_entry.file_name != disk_entry.file_name &&
-                        disk_entry.state == ClientState.WRITE_OWNED)
-                        LocalWriteBack(disk_entry.file_name);
-                
                 // copy values over
                 cache_entry.state = disk_entry.state;
 
@@ -256,6 +264,8 @@ implements ClientContract, Serializable
             // wait for above process to terminate
             process.waitFor();
                 
+            //if(cache_entry.state == ClientState.WRITE_OWNED) 
+                //LocalWriteBack(cache_entry.file_name);
             // clean open clients
             // server_object.Clean(cache_entry.file_name);
         }
